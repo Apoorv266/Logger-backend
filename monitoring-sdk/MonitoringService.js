@@ -40,7 +40,8 @@ export const MonitoringService = {
                 config.endpoint,
                 "https://firebaselogging-pa.googleapis.com",
                 "https://www.google-analytics.com", 
-                "https://analytics.google.com"
+                "https://analytics.google.com", 
+                "https://api.eu.amplitude.com"
             ],
         })
         startErrorBoundaryTracker()
