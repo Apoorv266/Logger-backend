@@ -8,20 +8,16 @@ function validateApp(app) {
   return app.trim();
 }
 
-function validateType(type) {
-  if (typeof type !== "string" || type.trim() === "") {
-    throw new TypeError("type must be a non-empty string");
+function validateOptionalFilter(value, name) {
+  if (value === undefined) {
+    return null;
   }
 
-  return type.trim();
-}
-
-function validateCmId(cmId) {
-  if (typeof cmId !== "string" || cmId.trim() === "") {
-    throw new TypeError("cmId must be a non-empty string");
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new TypeError(`${name} must be a non-empty string`);
   }
 
-  return cmId.trim();
+  return value.trim();
 }
 
 function validateClientDetails(clientDetails) {
@@ -41,8 +37,9 @@ function validateClientDetails(clientDetails) {
 }
 
 function mapExpandedEvents(rows) {
-  return rows.map(({ event, client_details: clientDetails }) => ({
+  return rows.map(({ event, app, client_details: clientDetails }) => ({
     ...event,
+    app,
     clientDetails,
   }));
 }
@@ -76,43 +73,36 @@ export const addLogs = async ({ app, events, clientDetails } = {}) => {
   return result.rows[0];
 };
 
-export const getLogsByApp = async (app) => {
+export const getLogsByFilters = async ({ app, type, cmId } = {}) => {
   const validatedApp = validateApp(app);
-  const result = await pool.query("SELECT * FROM logs WHERE app = $1", [validatedApp]);
+  const validatedType = validateOptionalFilter(type, "type");
+  const validatedCmId = validateOptionalFilter(cmId, "cmId");
+  const values = [validatedApp];
+  const conditions = ["log.app = $1"];
 
-  return result.rows;
-};
+  if (validatedType !== null) {
+    const parameterPosition = values.push(validatedType);
+    conditions.push(
+      `log.events @> JSONB_BUILD_ARRAY(JSONB_BUILD_OBJECT('type', $${parameterPosition}::text))`,
+      `expanded.event->>'type' = $${parameterPosition}`,
+    );
+  }
 
-export const getLogsByAppAndType = async (app, type) => {
-  const validatedApp = validateApp(app);
-  const validatedType = validateType(type);
+  if (validatedCmId !== null) {
+    const parameterPosition = values.push(validatedCmId);
+    conditions.push(
+      `log.client_details->>'cmId' = $${parameterPosition}`,
+    );
+  }
+
   const result = await pool.query(
-    `SELECT expanded.event, log.client_details
+    `SELECT expanded.event, log.app, log.client_details
      FROM public.logs AS log
      CROSS JOIN LATERAL JSONB_ARRAY_ELEMENTS(log.events)
        WITH ORDINALITY AS expanded(event, event_order)
-     WHERE log.app = $1
-       AND log.events @> JSONB_BUILD_ARRAY(JSONB_BUILD_OBJECT('type', $2::text))
-       AND expanded.event->>'type' = $2
+     WHERE ${conditions.join("\n       AND ")}
      ORDER BY log.created_at DESC, log.id DESC, expanded.event_order ASC`,
-    [validatedApp, validatedType],
-  );
-
-  return mapExpandedEvents(result.rows);
-};
-
-export const getLogsByAppAndCmId = async (app, cmId) => {
-  const validatedApp = validateApp(app);
-  const validatedCmId = validateCmId(cmId);
-  const result = await pool.query(
-    `SELECT expanded.event, log.client_details
-     FROM public.logs AS log
-     CROSS JOIN LATERAL JSONB_ARRAY_ELEMENTS(log.events)
-       WITH ORDINALITY AS expanded(event, event_order)
-     WHERE log.app = $1
-       AND log.client_details->>'cmId' = $2
-     ORDER BY log.created_at DESC, log.id DESC, expanded.event_order ASC`,
-    [validatedApp, validatedCmId],
+    values,
   );
 
   return mapExpandedEvents(result.rows);

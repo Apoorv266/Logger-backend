@@ -120,13 +120,30 @@ return the created row:
 The submitted data is also printed to the server console. The application does
 not impose a request-body or array-length limit.
 
-## Filter events by app and type
+## Filter events
+
+Use `GET /api/logs/filter` for every app-specific lookup. The `app` query
+parameter is mandatory, while `type` and `cmId` are optional:
 
 ```http
+# All events for an app
+GET /api/logs/filter?app=kapturecrm-ui
+
+# Filter by event type
 GET /api/logs/filter?app=kapturecrm-ui&type=console
+
+# Filter by clientDetails.cmId
+GET /api/logs/filter?app=kapturecrm-ui&cmId=CM-123
+
+# Require both type and cmId to match
+GET /api/logs/filter?app=kapturecrm-ui&type=console&cmId=CM-123
 ```
 
-The `data` array contains only the matching event objects:
+When both optional filters are supplied, they are combined with `AND`: the
+event must have the requested `type`, and its containing log batch must have the
+requested top-level `clientDetails.cmId`.
+
+Every filter combination returns the same event structure:
 
 ```json
 {
@@ -136,40 +153,7 @@ The `data` array contains only the matching event objects:
     {
       "type": "console",
       "message": "Page loaded",
-      "clientDetails": {
-        "cmId": "CM-123",
-        "browser": "Chrome",
-        "os": "macOS",
-        "version": "140.0"
-      }
-    }
-  ]
-}
-```
-
-The general `GET /api/logs` and app-specific `GET /api/logs/:app` endpoints also
-copy the batch-level `clientDetails` object onto every returned event. Events
-stored before this column was added return `"clientDetails": null`.
-
-## Filter events by app and cmId
-
-Use the app name and the top-level `clientDetails.cmId` value to fetch every
-event belonging to matching log batches:
-
-```http
-GET /api/logs/filter-by-cm-id?app=kapturecrm-ui&cmId=CM-123
-```
-
-The response uses the same structure as `/api/logs/filter`:
-
-```json
-{
-  "status": 200,
-  "message": "Events fetched successfully",
-  "data": [
-    {
-      "type": "console",
-      "message": "Page loaded",
+      "app": "kapturecrm-ui",
       "clientDetails": {
         "cmId": "CM-123",
         "browser": "Chrome",
@@ -180,7 +164,10 @@ The response uses the same structure as `/api/logs/filter`:
 }
 ```
 
-Both query parameters are required and must be non-empty. The comparison is an
-exact match after surrounding whitespace is removed from the query parameters.
-If no matching events exist, the endpoint returns status `404` with an empty
-`data` array.
+All supplied parameters must be non-empty strings. Comparisons are exact and
+case-sensitive after surrounding whitespace is removed. A missing or blank
+`app` returns status `400`; no matching events returns status `404` with an
+empty `data` array.
+
+The previous `/api/logs/filter-by-cm-id` and `/api/logs/:app` routes have been
+removed. Use `/api/logs/filter` for those lookups.

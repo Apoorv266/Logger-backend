@@ -1,9 +1,7 @@
 import {
   addLogs as addLogsModel,
   getAllLogs,
-  getLogsByApp,
-  getLogsByAppAndCmId,
-  getLogsByAppAndType,
+  getLogsByFilters,
 } from "../models/useModel.js";
 
 const flatEvents = (logs) => {
@@ -45,49 +43,15 @@ export const addLogs = async (req, res, next) => {
   }
 };
 
-export const fetchLogsByApp = async (req, res, next) => {
+export const fetchLogsByFilters = async (req, res, next) => {
   try {
-    const logs = await getLogsByApp(req.params.app);
-
-    if (logs.length === 0) {
-      return handleResponse(res, 404, "No logs found for this app", []);
-    }
-
-    const flatLogs = flatEvents(logs);
-    return handleResponse(res, 200, "Logs fetched successfully", flatLogs);
-  } catch (error) {
-    return next(error);
-  }
-};
-
-export const fetchLogsByAppAndType = async (req, res, next) => {
-  try {
-    const events = await getLogsByAppAndType(req.query.app, req.query.type);
+    const events = await getLogsByFilters(req.query);
 
     if (events.length === 0) {
       return handleResponse(
         res,
         404,
-        "No events found for this app and type",
-        [],
-      );
-    }
-
-    return handleResponse(res, 200, "Events fetched successfully", events);
-  } catch (error) {
-    return next(error);
-  }
-};
-
-export const fetchLogsByAppAndCmId = async (req, res, next) => {
-  try {
-    const events = await getLogsByAppAndCmId(req.query.app, req.query.cmId);
-
-    if (events.length === 0) {
-      return handleResponse(
-        res,
-        404,
-        "No events found for this app and cmId",
+        "No events found for the supplied filters",
         [],
       );
     }
