@@ -39,7 +39,8 @@ export const MonitoringService = {
             ignoredUrls: [
                 config.endpoint,
                 "https://firebaselogging-pa.googleapis.com",
-                "https://www.google-analytics.com"
+                "https://www.google-analytics.com", 
+                "https://analytics.google.com"
             ],
         })
         startErrorBoundaryTracker()
