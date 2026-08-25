@@ -9,6 +9,6 @@ const router = express.Router();
 
 router.post("/logs", addLogs);
 router.get(["/logs", "/fetch-logs"], fetchLogs);
-router.get("/logs/filter", fetchLogsByFilters);
+router.post("/logs/filter", fetchLogsByFilters);
 
 export default router;

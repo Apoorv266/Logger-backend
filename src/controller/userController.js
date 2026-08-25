@@ -45,7 +45,7 @@ export const addLogs = async (req, res, next) => {
 
 export const fetchLogsByFilters = async (req, res, next) => {
   try {
-    const events = await getLogsByFilters(req.query);
+    const events = await getLogsByFilters(req.body);
 
     if (events.length === 0) {
       return handleResponse(

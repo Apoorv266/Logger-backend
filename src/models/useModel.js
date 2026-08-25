@@ -1,5 +1,8 @@
 import pool from "../config/db.js";
 
+const ISO_DATE_TIME_WITH_TIMEZONE =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/i;
+
 function validateApp(app) {
   if (typeof app !== "string" || app.trim() === "") {
     throw new TypeError("app must be a non-empty string");
@@ -20,6 +23,52 @@ function validateOptionalFilter(value, name) {
   return value.trim();
 }
 
+function validateDateTime(value, name) {
+  if (
+    typeof value !== "string" ||
+    !ISO_DATE_TIME_WITH_TIMEZONE.test(value.trim())
+  ) {
+    throw new TypeError(
+      `${name} must be a valid ISO 8601 date-time with a timezone`,
+    );
+  }
+
+  const timestamp = Date.parse(value.trim());
+
+  if (Number.isNaN(timestamp)) {
+    throw new TypeError(
+      `${name} must be a valid ISO 8601 date-time with a timezone`,
+    );
+  }
+
+  return new Date(timestamp);
+}
+
+function validateDateRange(startDate, endDate) {
+  const hasStartDate = startDate !== undefined;
+  const hasEndDate = endDate !== undefined;
+
+  if (hasStartDate !== hasEndDate) {
+    throw new TypeError("startDate and endDate must be provided together");
+  }
+
+  if (!hasStartDate) {
+    return null;
+  }
+
+  const validatedStartDate = validateDateTime(startDate, "startDate");
+  const validatedEndDate = validateDateTime(endDate, "endDate");
+
+  if (validatedStartDate > validatedEndDate) {
+    throw new TypeError("startDate must be before or equal to endDate");
+  }
+
+  return {
+    startDate: validatedStartDate.toISOString(),
+    endDate: validatedEndDate.toISOString(),
+  };
+}
+
 function validateClientDetails(clientDetails) {
   if (clientDetails === undefined) {
     return null;
@@ -34,6 +83,18 @@ function validateClientDetails(clientDetails) {
   }
 
   return clientDetails;
+}
+
+function validateFilterPayload(payload) {
+  if (payload === undefined) {
+    return {};
+  }
+
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new TypeError("Filter payload must be a JSON object");
+  }
+
+  return payload;
 }
 
 function mapExpandedEvents(rows) {
@@ -73,10 +134,13 @@ export const addLogs = async ({ app, events, clientDetails } = {}) => {
   return result.rows[0];
 };
 
-export const getLogsByFilters = async ({ app, type, cmId } = {}) => {
+export const getLogsByFilters = async (payload) => {
+  const { app, type, cmId, startDate, endDate } =
+    validateFilterPayload(payload);
   const validatedApp = validateApp(app);
   const validatedType = validateOptionalFilter(type, "type");
   const validatedCmId = validateOptionalFilter(cmId, "cmId");
+  const validatedDateRange = validateDateRange(startDate, endDate);
   const values = [validatedApp];
   const conditions = ["log.app = $1"];
 
@@ -92,6 +156,22 @@ export const getLogsByFilters = async ({ app, type, cmId } = {}) => {
     const parameterPosition = values.push(validatedCmId);
     conditions.push(
       `log.client_details->>'cmId' = $${parameterPosition}`,
+    );
+  }
+
+  if (validatedDateRange !== null) {
+    const startDatePosition = values.push(validatedDateRange.startDate);
+    const endDatePosition = values.push(validatedDateRange.endDate);
+    conditions.push(
+      `(CASE
+         WHEN pg_input_is_valid(
+           expanded.event->>'timestamp',
+           'timestamp with time zone'
+         )
+         THEN (expanded.event->>'timestamp')::timestamptz
+         ELSE NULL
+       END) BETWEEN $${startDatePosition}::timestamptz
+                AND $${endDatePosition}::timestamptz`,
     );
   }
 

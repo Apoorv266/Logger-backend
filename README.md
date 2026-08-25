@@ -122,26 +122,58 @@ not impose a request-body or array-length limit.
 
 ## Filter events
 
-Use `GET /api/logs/filter` for every app-specific lookup. The `app` query
-parameter is mandatory, while `type` and `cmId` are optional:
+Send every app-specific lookup to `POST /api/logs/filter` as JSON. The `app`
+property is mandatory. The `type`, `cmId`, and date range are optional:
 
-```http
-# All events for an app
-GET /api/logs/filter?app=kapturecrm-ui
+```json
+{
+  "app": "kapturecrm-ui",
+  "type": "console",
+  "cmId": "CM-123",
+  "startDate": "2026-08-25T09:00:00.000Z",
+  "endDate": "2026-08-25T10:00:00.000Z"
+}
+```
 
-# Filter by event type
-GET /api/logs/filter?app=kapturecrm-ui&type=console
+For an app-only lookup, send only the mandatory property:
 
-# Filter by clientDetails.cmId
-GET /api/logs/filter?app=kapturecrm-ui&cmId=CM-123
+```json
+{
+  "app": "kapturecrm-ui"
+}
+```
 
-# Require both type and cmId to match
-GET /api/logs/filter?app=kapturecrm-ui&type=console&cmId=CM-123
+With Moment.js, explicitly convert the selected dates to ISO strings before
+sending them:
+
+```js
+const filterPayload = {
+  app: "kapturecrm-ui",
+  type: "console",
+  cmId: "CM-123",
+  startDate: moment(selectedStartDate).toISOString(),
+  endDate: moment(selectedEndDate).toISOString(),
+};
+
+const response = await fetch("http://localhost:3001/api/logs/filter", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(filterPayload),
+});
 ```
 
 When both optional filters are supplied, they are combined with `AND`: the
 event must have the requested `type`, and its containing log batch must have the
 requested top-level `clientDetails.cmId`.
+
+`startDate` and `endDate` must either both be omitted or both be supplied. They
+must be ISO 8601 date-times with a timezone, such as
+`2026-08-25T09:00:00.000Z`. Moment's `toISOString()` produces the recommended
+format directly. Offset-based ISO values such as
+`2026-08-25T14:30:00+05:30` are also accepted. The range is inclusive and
+compares against each event's `timestamp`, not the database row's `created_at`.
+Events with a missing or invalid timestamp are excluded when a date range is
+active.
 
 Every filter combination returns the same event structure:
 
@@ -164,10 +196,11 @@ Every filter combination returns the same event structure:
 }
 ```
 
-All supplied parameters must be non-empty strings. Comparisons are exact and
-case-sensitive after surrounding whitespace is removed. A missing or blank
-`app` returns status `400`; no matching events returns status `404` with an
-empty `data` array.
+All supplied parameters must be valid non-empty strings. The `app`, `type`, and
+`cmId` comparisons are exact and case-sensitive after surrounding whitespace is
+removed. A missing or blank `app`, an incomplete date pair, an invalid date, or
+a start date after the end date returns status `400`. No matching events returns
+status `404` with an empty `data` array.
 
 The previous `/api/logs/filter-by-cm-id` and `/api/logs/:app` routes have been
-removed. Use `/api/logs/filter` for those lookups.
+removed. Use `POST /api/logs/filter` for those lookups.
