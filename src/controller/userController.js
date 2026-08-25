@@ -2,6 +2,7 @@ import {
   addLogs as addLogsModel,
   getAllLogs,
   getLogsByApp,
+  getLogsByAppAndCmId,
   getLogsByAppAndType,
 } from "../models/useModel.js";
 
@@ -68,6 +69,25 @@ export const fetchLogsByAppAndType = async (req, res, next) => {
         res,
         404,
         "No events found for this app and type",
+        [],
+      );
+    }
+
+    return handleResponse(res, 200, "Events fetched successfully", events);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const fetchLogsByAppAndCmId = async (req, res, next) => {
+  try {
+    const events = await getLogsByAppAndCmId(req.query.app, req.query.cmId);
+
+    if (events.length === 0) {
+      return handleResponse(
+        res,
+        404,
+        "No events found for this app and cmId",
         [],
       );
     }

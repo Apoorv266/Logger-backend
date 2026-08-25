@@ -56,6 +56,11 @@ const createLogsTable = async () => {
       ON public.logs USING GIN (events JSONB_PATH_OPS)
     `);
 
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS logs_app_cm_id_idx
+      ON public.logs (app, (client_details->>'cmId'))
+    `);
+
     await client.query("COMMIT");
     console.log("Logs table is ready");
   } catch (error) {

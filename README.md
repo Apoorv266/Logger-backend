@@ -75,6 +75,7 @@ const response = await fetch("http://localhost:3001/api/logs", {
       { level: "error", message: "Request failed", status: 500 },
     ],
     clientDetails: {
+      cmId: "CM-123",
       browser: "Chrome",
       os: "macOS",
       version: "140.0",
@@ -106,6 +107,7 @@ return the created row:
       { "level": "error", "message": "Request failed", "status": 500 }
     ],
     "clientDetails": {
+      "cmId": "CM-123",
       "browser": "Chrome",
       "os": "macOS",
       "version": "140.0"
@@ -135,6 +137,7 @@ The `data` array contains only the matching event objects:
       "type": "console",
       "message": "Page loaded",
       "clientDetails": {
+        "cmId": "CM-123",
         "browser": "Chrome",
         "os": "macOS",
         "version": "140.0"
@@ -147,3 +150,37 @@ The `data` array contains only the matching event objects:
 The general `GET /api/logs` and app-specific `GET /api/logs/:app` endpoints also
 copy the batch-level `clientDetails` object onto every returned event. Events
 stored before this column was added return `"clientDetails": null`.
+
+## Filter events by app and cmId
+
+Use the app name and the top-level `clientDetails.cmId` value to fetch every
+event belonging to matching log batches:
+
+```http
+GET /api/logs/filter-by-cm-id?app=kapturecrm-ui&cmId=CM-123
+```
+
+The response uses the same structure as `/api/logs/filter`:
+
+```json
+{
+  "status": 200,
+  "message": "Events fetched successfully",
+  "data": [
+    {
+      "type": "console",
+      "message": "Page loaded",
+      "clientDetails": {
+        "cmId": "CM-123",
+        "browser": "Chrome",
+        "os": "macOS"
+      }
+    }
+  ]
+}
+```
+
+Both query parameters are required and must be non-empty. The comparison is an
+exact match after surrounding whitespace is removed from the query parameters.
+If no matching events exist, the endpoint returns status `404` with an empty
+`data` array.

@@ -16,6 +16,14 @@ function validateType(type) {
   return type.trim();
 }
 
+function validateCmId(cmId) {
+  if (typeof cmId !== "string" || cmId.trim() === "") {
+    throw new TypeError("cmId must be a non-empty string");
+  }
+
+  return cmId.trim();
+}
+
 function validateClientDetails(clientDetails) {
   if (clientDetails === undefined) {
     return null;
@@ -30,6 +38,13 @@ function validateClientDetails(clientDetails) {
   }
 
   return clientDetails;
+}
+
+function mapExpandedEvents(rows) {
+  return rows.map(({ event, client_details: clientDetails }) => ({
+    ...event,
+    clientDetails,
+  }));
 }
 
 export const getAllLogs = async () => {
@@ -83,8 +98,22 @@ export const getLogsByAppAndType = async (app, type) => {
     [validatedApp, validatedType],
   );
 
-  return result.rows.map(({ event, client_details: clientDetails }) => ({
-    ...event,
-    clientDetails,
-  }));
+  return mapExpandedEvents(result.rows);
+};
+
+export const getLogsByAppAndCmId = async (app, cmId) => {
+  const validatedApp = validateApp(app);
+  const validatedCmId = validateCmId(cmId);
+  const result = await pool.query(
+    `SELECT expanded.event, log.client_details
+     FROM public.logs AS log
+     CROSS JOIN LATERAL JSONB_ARRAY_ELEMENTS(log.events)
+       WITH ORDINALITY AS expanded(event, event_order)
+     WHERE log.app = $1
+       AND log.client_details->>'cmId' = $2
+     ORDER BY log.created_at DESC, log.id DESC, expanded.event_order ASC`,
+    [validatedApp, validatedCmId],
+  );
+
+  return mapExpandedEvents(result.rows);
 };
