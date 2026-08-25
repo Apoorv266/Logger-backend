@@ -1,0 +1,27 @@
+{
+  "name": "logger-service-backend",
+  "version": "1.0.0",
+  "description": "Express.js backend server",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "build:monitoring": "esbuild monitoring-sdk/cdn-entry.js --bundle --minify --format=iife --outfile=public/monitoring/monitoring.min.js",
+    "check:monitoring": "node scripts/check-monitoring-bundle.js",
+    "test": "npm run check:monitoring && node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.1.0",
+    "helmet": "^8.3.0",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
