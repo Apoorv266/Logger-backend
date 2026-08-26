@@ -1,15 +1,12 @@
 // monitoring/cdn-entry.js
 // Bundled standalone via `yarn build:monitoring` and hosted on a CDN.
 // Consuming pages include it as:
-// <script>
-//     window.KaptureMonitoringConfig = {
-//         getClientDetails: () => ({ userId: "123", tenantId: "acme" }),
-//     }
-// </script>
-// <script src=".../monitoring.min.js" data-endpoint="https://api.example.com/monitoring/events" data-app="nui"></script>
+// <script src="https://logger.example.com/monitoring/monitoring.min.js" data-app="nui"></script>
 
 import { MonitoringService } from "./MonitoringService"
 
+const PUBLIC_API_NAME = "kapture-monitoring"
+const PUBLIC_API_VERSION = 1
 const EMPTY_CONFIG = Object.freeze({})
 
 function getOwnDataProperty(object, propertyName) {
@@ -72,11 +69,47 @@ function readClientConfig() {
     }
 }
 
+function getDefaultEndpoint(script) {
+    const scriptUrl = normalizeEndpoint(script?.src)
+
+    return scriptUrl ? new URL("/api/logs", scriptUrl).href : undefined
+}
+
+function exposePublicApi() {
+    const existingApi = getOwnDataProperty(window, "KaptureMonitoring")
+
+    if (
+        existingApi
+        && getOwnDataProperty(existingApi, "name") === PUBLIC_API_NAME
+        && getOwnDataProperty(existingApi, "version") === PUBLIC_API_VERSION
+        && typeof getOwnDataProperty(existingApi, "setClientDetailsProvider") === "function"
+    ) {
+        return
+    }
+
+    const publicApi = Object.freeze({
+        name: PUBLIC_API_NAME,
+        version: PUBLIC_API_VERSION,
+        setClientDetailsProvider: provider => MonitoringService.setClientDetailsProvider(provider),
+    })
+
+    try {
+        Object.defineProperty(window, "KaptureMonitoring", {
+            value: publicApi,
+            writable: false,
+            configurable: false,
+        })
+    } catch (_error) {
+        // Keep monitoring active even when another non-configurable global uses this name.
+    }
+}
+
 const script = document.currentScript
 const clientConfig = readClientConfig()
+exposePublicApi()
 
 MonitoringService.start({
-    endpoint: normalizeEndpoint(script?.dataset.endpoint) || clientConfig.endpoint,
+    endpoint: normalizeEndpoint(script?.dataset.endpoint) || clientConfig.endpoint || getDefaultEndpoint(script),
     app: normalizeString(script?.dataset.app) || clientConfig.app,
     getClientDetails: clientConfig.getClientDetails,
 })

@@ -6,14 +6,6 @@ export function addEvent(event) {
     queue.push(event)
 }
 
-
 export function getQueue() {
-    const events = [...queue]
-    queue.length = 0
-    return events
+    return queue.splice(0, queue.length)
 }
-
-export function clearQueue() {
-    queue.length = 0
-}
-

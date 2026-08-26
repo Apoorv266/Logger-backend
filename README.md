@@ -26,19 +26,48 @@ The standalone SDK is publicly available at:
 http://localhost:5001/monitoring/monitoring.min.js
 ```
 
-Set `window.KaptureMonitoringConfig` before loading the script. The configuration
-supports:
+For anonymous monitoring, add one script element. When `data-endpoint` is
+omitted, the SDK derives `/api/logs` from the script URL:
+
+```html
+<script
+  src="http://localhost:5001/monitoring/monitoring.min.js"
+  data-app="kapturecrm-ui"
+></script>
+```
+
+Applications can register a synchronous provider after the SDK loads. The
+provider is evaluated once immediately before each log request, so the complete
+batch receives the latest Redux state available when it is sent:
+
+```js
+window.KaptureMonitoring.setClientDetailsProvider(() => {
+  const state = store.getState()
+
+  return {
+    userId: state.global?.currentEmployee?.id,
+    cmId: state.general?.chatCredentials?.cmId,
+    isLoggedIn: Boolean(state.auth?.user?.isLogin),
+  }
+})
+```
+
+Every flush sends at most one request using the existing
+`{ app, events, clientDetails }` structure. If Redux state changes during the
+flush interval, the latest state is applied to the complete batch.
+
+For backward compatibility, `window.KaptureMonitoringConfig` can still be set
+before loading the script. The configuration supports:
 
 - `endpoint`: the complete log-ingestion URL, such as
   `http://localhost:5001/api/logs`.
 - `app`: the application name stored with each event.
-- `getClientDetails`: an optional callback that returns current user, tenant, or
-  browser context. It is called at flush time, so late-arriving login state is
-  supported.
+- `getClientDetails`: an optional callback that becomes the initial client
+  details provider.
 
-Alternatively, `data-endpoint` and `data-app` attributes can be placed on the
-script element. These attributes take precedence over the global configuration.
-The script loads as a classic IIFE and starts automatically.
+`data-endpoint` and `data-app` take precedence over global configuration. When
+neither endpoint is supplied, the SDK derives `/api/logs` from its own source
+URL. The script loads as a classic IIFE and starts automatically.
 
 The SDK file is intentionally public. Browser log submission is restricted by
 the API origin allowlist; CORS is not authentication and does not prevent direct

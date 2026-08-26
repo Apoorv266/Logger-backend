@@ -6,30 +6,53 @@ import { getQueue } from "./EventQueue"
 import { startFetchTracker } from "./FetchTracker"
 import { OriginalConsole } from "./OriginalConsole"
 
-function getClientDetails(getClientDetailsCallback) {
-    if (typeof getClientDetailsCallback !== "function") {
+let clientDetailsProvider
+
+function getFreshClientDetails() {
+    if (typeof clientDetailsProvider !== "function") {
         return {}
     }
 
     try {
-        const clientDetails = getClientDetailsCallback()
+        const clientDetails = clientDetailsProvider()
 
-        if (clientDetails && typeof clientDetails === "object" && !Array.isArray(clientDetails)) {
-            return clientDetails
+        if (!clientDetails || typeof clientDetails !== "object" || Array.isArray(clientDetails)) {
+            OriginalConsole.warn("MonitoringService: client details provider must return an object")
+            return {}
         }
 
-        OriginalConsole.warn("MonitoringService: getClientDetails must return an object")
+        const normalizedClientDetails = JSON.parse(JSON.stringify(clientDetails))
+
+        if (!normalizedClientDetails || typeof normalizedClientDetails !== "object" || Array.isArray(normalizedClientDetails)) {
+            OriginalConsole.warn("MonitoringService: client details provider must return a JSON object")
+            return {}
+        }
+
+        return normalizedClientDetails
     } catch (error) {
         OriginalConsole.error("MonitoringService: failed to get client details", error)
+        return {}
     }
-
-    return {}
 }
 
 export const MonitoringService = {
+    setClientDetailsProvider(provider) {
+        if (typeof provider !== "function") {
+            OriginalConsole.warn("MonitoringService: setClientDetailsProvider expects a function")
+            return false
+        }
+
+        clientDetailsProvider = provider
+        return true
+    },
+
     start(config = {}) {
         if (window.__kaptureMonitoringStarted) {
             return false
+        }
+
+        if (typeof config.getClientDetails === "function") {
+            clientDetailsProvider = config.getClientDetails
         }
 
         startConsoleTracker()
@@ -66,7 +89,7 @@ export const MonitoringService = {
                 body: JSON.stringify({
                     app: config.app,
                     events,
-                    clientDetails: getClientDetails(config.getClientDetails),
+                    clientDetails: getFreshClientDetails(),
                 }),
             }).catch(error => OriginalConsole.error("MonitoringService: failed to report events", error))
         }, 20000)

@@ -15,11 +15,6 @@ function createBrowserContext() {
   const browser = {
     ArrayBuffer,
     Blob,
-    CustomEvent: class CustomEvent {
-      constructor(type) {
-        this.type = type;
-      }
-    },
     FormData,
     Headers,
     Request,
@@ -44,8 +39,8 @@ function createBrowserContext() {
     },
     document: {
       currentScript: {
+        src: "https://logger.example.com/monitoring/monitoring.min.js",
         dataset: {
-          endpoint: "https://logger.example.com/api/logs",
           app: "kapturecrm-ui",
         },
       },
@@ -79,39 +74,169 @@ function createBrowserContext() {
   return { browser, intervals, requests };
 }
 
-test("the browser SDK is idempotent and flushes events", async () => {
+test("the browser SDK derives its endpoint and reads client details once per request", async () => {
   const bundle = await readFile(bundlePath, "utf8");
   const { browser, intervals, requests } = createBrowserContext();
   const context = vm.createContext(browser);
 
+  vm.runInContext(bundle, context);
+
+  const publicApi = browser.KaptureMonitoring;
+  const firstConsoleLog = browser.console.log;
+  assert.equal(typeof publicApi.setClientDetailsProvider, "function");
+  assert.equal(publicApi.name, "kapture-monitoring");
+  assert.equal(publicApi.version, 1);
+
+  browser.reduxState = { userId: "123", tenantId: "acme" };
+  let providerCalls = 0;
+
+  assert.equal(
+    publicApi.setClientDetailsProvider(() => {
+      providerCalls += 1;
+      return browser.reduxState;
+    }),
+    true,
+  );
+
+  vm.runInContext(bundle, context);
+
+  assert.equal(intervals.length, 1);
+  assert.equal(browser.console.log, firstConsoleLog);
+  assert.equal(browser.KaptureMonitoring, publicApi);
+
+  browser.console.log("First event");
+  browser.console.info("Second event");
+  browser.reduxState.userId = "456";
+  browser.console.warn("Third event");
+
+  assert.equal(providerCalls, 0);
+  intervals[0]();
+  await Promise.resolve();
+
+  assert.equal(providerCalls, 1);
+  assert.equal(requests.length, 1);
+
+  const payload = JSON.parse(requests[0].options.body);
+
+  assert.deepEqual(Object.keys(payload).sort(), [
+    "app",
+    "clientDetails",
+    "events",
+  ]);
+  assert.equal(payload.app, "kapturecrm-ui");
+
+  assert.equal(requests[0].url, "https://logger.example.com/api/logs");
+  assert.equal(payload.events.length, 3);
+  assert.deepEqual(payload.clientDetails, {
+    userId: "456",
+    tenantId: "acme",
+  });
+});
+
+test("legacy configuration supplies the endpoint and latest batch context", async () => {
+  const bundle = await readFile(bundlePath, "utf8");
+  const { browser, intervals, requests } = createBrowserContext();
+  const context = vm.createContext(browser);
+
+  browser.document.currentScript.dataset = {};
+  vm.runInContext(
+    `window.legacyUserId = "first-user";
+     window.KaptureMonitoringConfig = {
+       endpoint: "https://legacy.example.com/api/logs",
+       app: "legacy-app",
+       getClientDetails: () => ({ userId: window.legacyUserId })
+     }`,
+    context,
+  );
+  vm.runInContext(bundle, context);
+
+  browser.console.log("First legacy event");
+  browser.legacyUserId = "second-user";
+  browser.console.log("Second legacy event");
+  intervals[0]();
+  await Promise.resolve();
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, "https://legacy.example.com/api/logs");
+
+  const payload = JSON.parse(requests[0].options.body);
+  assert.equal(payload.app, "legacy-app");
+  assert.equal(payload.events.length, 2);
+  assert.deepEqual(payload.clientDetails, { userId: "second-user" });
+});
+
+test("the SDK replaces an unbranded configurable namespace collision", async () => {
+  const bundle = await readFile(bundlePath, "utf8");
+  const { browser } = createBrowserContext();
+  const context = vm.createContext(browser);
+  const collidingApi = {
+    setClientDetailsProvider() {
+      throw new Error("Unrelated API must not be called");
+    },
+  };
+
+  browser.KaptureMonitoring = collidingApi;
+  vm.runInContext(bundle, context);
+
+  assert.notEqual(browser.KaptureMonitoring, collidingApi);
+  assert.equal(browser.KaptureMonitoring.name, "kapture-monitoring");
+  assert.equal(
+    browser.KaptureMonitoring.setClientDetailsProvider(() => ({})),
+    true,
+  );
+});
+
+test("script attributes override legacy global configuration", async () => {
+  const bundle = await readFile(bundlePath, "utf8");
+  const { browser, intervals, requests } = createBrowserContext();
+  const context = vm.createContext(browser);
+
+  browser.document.currentScript.dataset.endpoint =
+    "https://override.example.com/custom/logs";
+  browser.document.currentScript.dataset.app = "attribute-app";
+
   vm.runInContext(
     `window.KaptureMonitoringConfig = {
-      getClientDetails: () => ({ userId: "123", tenantId: "acme" })
+      endpoint: "https://legacy.example.com/api/logs",
+      app: "legacy-app",
+      getClientDetails: () => ({ userId: "legacy-user" })
     }`,
     context,
   );
   vm.runInContext(bundle, context);
 
-  const firstConsoleLog = browser.console.log;
-  vm.runInContext(bundle, context);
-
-  assert.equal(intervals.length, 1);
-  assert.equal(browser.console.log, firstConsoleLog);
-  assert.equal(browser.KaptureMonitoring, undefined);
-
-  browser.console.log("Customer page loaded");
+  browser.console.error("Legacy provider event");
   intervals[0]();
   await Promise.resolve();
 
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].url, "https://logger.example.com/api/logs");
+  assert.equal(requests[0].url, "https://override.example.com/custom/logs");
 
   const payload = JSON.parse(requests[0].options.body);
-  assert.equal(payload.app, "kapturecrm-ui");
+  assert.equal(payload.app, "attribute-app");
   assert.equal(payload.events.length, 1);
-  assert.equal(payload.events[0].type, "console");
-  assert.deepEqual(payload.clientDetails, {
-    userId: "123",
-    tenantId: "acme",
+  assert.deepEqual(payload.clientDetails, { userId: "legacy-user" });
+});
+
+test("invalid client details do not stop a batch request", async () => {
+  const bundle = await readFile(bundlePath, "utf8");
+  const { browser, intervals, requests } = createBrowserContext();
+  const context = vm.createContext(browser);
+
+  vm.runInContext(bundle, context);
+
+  assert.equal(browser.KaptureMonitoring.setClientDetailsProvider(null), false);
+  browser.KaptureMonitoring.setClientDetailsProvider(() => {
+    throw new Error("Redux is unavailable");
   });
+  browser.console.warn("Throwing provider");
+
+  intervals[0]();
+  await Promise.resolve();
+
+  assert.equal(requests.length, 1);
+
+  const payload = JSON.parse(requests[0].options.body);
+  assert.equal(payload.events.length, 1);
+  assert.deepEqual(payload.clientDetails, {});
 });
