@@ -48,8 +48,8 @@ test("parses the plural origin allowlist and supports the legacy variable", () =
   );
 });
 
-test("serves the monitoring bundle publicly with safe revalidation headers", async () => {
-  const response = await fetch(`${baseUrl}/monitoring/monitoring.min.js`, {
+test("serves the v1 monitoring bundle publicly with safe revalidation headers", async () => {
+  const response = await fetch(`${baseUrl}/monitoring/v1/monitoring.min.js`, {
     headers: { Origin: "https://unlisted.example.com" },
   });
   const bundle = await response.text();
@@ -68,14 +68,14 @@ test("serves the monitoring bundle publicly with safe revalidation headers", asy
   assert.ok(bundle.length > 1_000);
 });
 
-test("revalidates the stable monitoring bundle URL with its ETag", async () => {
+test("revalidates the v1 monitoring bundle URL with its ETag", async () => {
   const firstResponse = await fetch(
-    `${baseUrl}/monitoring/monitoring.min.js`,
+    `${baseUrl}/monitoring/v1/monitoring.min.js`,
   );
   const etag = firstResponse.headers.get("etag");
   const secondStatus = await new Promise((resolve, reject) => {
     const request = http.get(
-      `${baseUrl}/monitoring/monitoring.min.js`,
+      `${baseUrl}/monitoring/v1/monitoring.min.js`,
       { headers: { "If-None-Match": etag } },
       (response) => {
         response.resume();
@@ -86,6 +86,12 @@ test("revalidates the stable monitoring bundle URL with its ETag", async () => {
   });
 
   assert.equal(secondStatus, 304);
+});
+
+test("does not serve the removed unversioned monitoring bundle URL", async () => {
+  const response = await fetch(`${baseUrl}/monitoring/monitoring.min.js`);
+
+  assert.equal(response.status, 404);
 });
 
 for (const origin of [

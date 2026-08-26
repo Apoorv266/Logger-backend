@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "build:monitoring": "esbuild monitoring-sdk/cdn-entry.js --bundle --minify --format=iife --outfile=public/monitoring/monitoring.min.js",
+    "build:monitoring": "esbuild monitoring-sdk/cdn-entry.js --bundle --minify --format=iife --outfile=public/monitoring/v1/monitoring.min.js",
     "check:monitoring": "node scripts/check-monitoring-bundle.js",
     "test": "npm run check:monitoring && node --test"
   },

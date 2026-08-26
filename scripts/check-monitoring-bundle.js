@@ -10,7 +10,7 @@ const projectRoot = path.resolve(
 const entryPoint = path.join(projectRoot, "monitoring-sdk/cdn-entry.js");
 const committedBundlePath = path.join(
   projectRoot,
-  "public/monitoring/monitoring.min.js",
+  "public/monitoring/v1/monitoring.min.js",
 );
 
 const [buildResult, committedBundle] = await Promise.all([
@@ -29,8 +29,8 @@ if (
   !Buffer.from(buildResult.outputFiles[0].contents).equals(committedBundle)
 ) {
   throw new Error(
-    "The committed monitoring bundle is stale. Run npm run build:monitoring.",
+    "The committed v1 monitoring bundle is stale. Run npm run build:monitoring.",
   );
 }
 
-console.log("The committed monitoring bundle matches its source.");
+console.log("The committed v1 monitoring bundle matches its source.");

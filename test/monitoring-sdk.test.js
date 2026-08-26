@@ -4,7 +4,7 @@ import path from "node:path";
 import { test } from "node:test";
 import vm from "node:vm";
 
-const bundlePath = path.resolve("public/monitoring/monitoring.min.js");
+const bundlePath = path.resolve("public/monitoring/v1/monitoring.min.js");
 
 function createBrowserContext() {
   const intervals = [];
@@ -39,7 +39,7 @@ function createBrowserContext() {
     },
     document: {
       currentScript: {
-        src: "https://logger.example.com/monitoring/monitoring.min.js",
+        src: "https://logger.example.com/monitoring/v1/monitoring.min.js",
         dataset: {
           app: "kapturecrm-ui",
         },

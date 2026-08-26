@@ -23,7 +23,7 @@ and a deployed CRM can be enabled together with
 The standalone SDK is publicly available at:
 
 ```text
-http://localhost:5001/monitoring/monitoring.min.js
+http://localhost:5001/monitoring/v1/monitoring.min.js
 ```
 
 For anonymous monitoring, add one script element. When `data-endpoint` is
@@ -31,10 +31,15 @@ omitted, the SDK derives `/api/logs` from the script URL:
 
 ```html
 <script
-  src="http://localhost:5001/monitoring/monitoring.min.js"
+  src="http://localhost:5001/monitoring/v1/monitoring.min.js"
   data-app="kapturecrm-ui"
 ></script>
 ```
+
+The `/v1/` segment pins the application to the version 1 public SDK contract.
+Future breaking contracts will use a separate major-version URL such as `/v2/`.
+The old unversioned `/monitoring/monitoring.min.js` URL is not served, and each
+page must load only one monitoring SDK version to avoid duplicate event capture.
 
 Applications can register a synchronous provider after the SDK loads. The
 provider is evaluated once immediately before each log request, so the complete

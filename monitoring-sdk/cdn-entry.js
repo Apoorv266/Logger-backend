@@ -1,7 +1,7 @@
 // monitoring/cdn-entry.js
-// Bundled standalone via `yarn build:monitoring` and hosted on a CDN.
+// Bundled standalone via `npm run build:monitoring` and hosted on a CDN.
 // Consuming pages include it as:
-// <script src="https://logger.example.com/monitoring/monitoring.min.js" data-app="nui"></script>
+// <script src="https://logger.example.com/monitoring/v1/monitoring.min.js" data-app="nui"></script>
 
 import { MonitoringService } from "./MonitoringService"
 
