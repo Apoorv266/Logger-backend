@@ -47,7 +47,15 @@ function createBrowserContext() {
     },
     fetch: async (url, options) => {
       requests.push({ url, options });
-      return { ok: true };
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: new Headers({ "content-type": "application/json" }),
+        clone() {
+          return { text: async () => '{"ok":true}' };
+        },
+      };
     },
     location: { href: "https://crm.example.com/nui/" },
     performance: { now: () => 1 },
@@ -74,7 +82,7 @@ function createBrowserContext() {
   return { browser, intervals, requests };
 }
 
-test("the browser SDK derives its endpoint and reads client details once per request", async () => {
+test("the browser SDK derives its endpoint and reads current client details", async () => {
   const bundle = await readFile(bundlePath, "utf8");
   const { browser, intervals, requests } = createBrowserContext();
   const context = vm.createContext(browser);
@@ -109,11 +117,11 @@ test("the browser SDK derives its endpoint and reads client details once per req
   browser.reduxState.userId = "456";
   browser.console.warn("Third event");
 
-  assert.equal(providerCalls, 0);
+  assert.equal(providerCalls, 3);
   intervals[0]();
   await Promise.resolve();
 
-  assert.equal(providerCalls, 1);
+  assert.equal(providerCalls, 5);
   assert.equal(requests.length, 1);
 
   const payload = JSON.parse(requests[0].options.body);
@@ -131,6 +139,81 @@ test("the browser SDK derives its endpoint and reads client details once per req
     userId: "456",
     tenantId: "acme",
   });
+});
+
+test("default console rules apply when cmId is unavailable or unknown", async () => {
+  const bundle = await readFile(bundlePath, "utf8");
+  const { browser, intervals, requests } = createBrowserContext();
+  const context = vm.createContext(browser);
+
+  vm.runInContext(bundle, context);
+  browser.KaptureMonitoring.setClientDetailsProvider(() => ({ cmId: "unknown" }));
+
+  browser.console.log("jwt_access_token exists: false NULL");
+  browser.console.warn("null EXPIRYTIMESTAMP (MS) INVALID");
+  browser.console.info("Useful console message");
+  intervals[0]();
+  await Promise.resolve();
+
+  const payload = JSON.parse(requests.at(-1).options.body);
+  assert.equal(payload.events.length, 1);
+  assert.equal(payload.events[0].message, "Useful console message");
+});
+
+test("cmId-specific console rules are additive and apply after cmId becomes available", async () => {
+  const bundle = await readFile(bundlePath, "utf8");
+  const { browser, intervals, requests } = createBrowserContext();
+  const context = vm.createContext(browser);
+  let clientDetails = {};
+
+  vm.runInContext(bundle, context);
+  browser.KaptureMonitoring.setClientDetailsProvider(() => clientDetails);
+
+  browser.console.log("Exact client message");
+  clientDetails = { cmId: 415 };
+  browser.console.log("EXACT CLIENT MESSAGE");
+  browser.console.warn("Prefix partial client phrase suffix");
+  browser.console.info("Registering the ping handler");
+  browser.console.error("Client-visible message");
+  intervals[0]();
+  await Promise.resolve();
+
+  const payload = JSON.parse(requests.at(-1).options.body);
+  assert.deepEqual(
+    payload.events.map((event) => event.message),
+    ["Exact client message", "Client-visible message"],
+  );
+  assert.deepEqual(payload.clientDetails, { cmId: 415 });
+});
+
+test("default and cmId-specific URL rules ignore an entire origin", async () => {
+  const bundle = await readFile(bundlePath, "utf8");
+  const { browser, intervals, requests } = createBrowserContext();
+  const context = vm.createContext(browser);
+  let clientDetails = { cmId: "unknown" };
+
+  vm.runInContext(bundle, context);
+  browser.KaptureMonitoring.setClientDetailsProvider(() => clientDetails);
+
+  await browser.fetch("https://firebaselogging-pa.googleapis.com/v1/firelog");
+  await browser.fetch("https://client-service.example.com/before-cm-id");
+  clientDetails = { cmId: "415" };
+  await browser.fetch("https://client-service.example.com/after-cm-id");
+  await browser.fetch("https://api.example.com/orders");
+  await Promise.resolve();
+  await Promise.resolve();
+
+  intervals[0]();
+  await Promise.resolve();
+
+  const payload = JSON.parse(requests.at(-1).options.body);
+  assert.deepEqual(
+    payload.events.map((event) => event.url),
+    [
+      "https://client-service.example.com/before-cm-id",
+      "https://api.example.com/orders",
+    ],
+  );
 });
 
 test("legacy configuration supplies the endpoint and latest batch context", async () => {

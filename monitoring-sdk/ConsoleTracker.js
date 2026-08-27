@@ -2,6 +2,7 @@
 
 import { addEvent } from "./EventQueue";
 import { OriginalConsole } from "./OriginalConsole";
+import { CLIENT_MONITORING_CONFIG } from "./ClientMonitoringConfig";
 
 const METHODS = [
   "log",
@@ -9,29 +10,6 @@ const METHODS = [
   "warn",
   "error",
   "debug",
-];
-
-// Use this list when the entire console message must match.
-const EXACT_IGNORED_CONSOLE_MESSAGES = [
-  "jwt_access_token exists: false NULL",
-  "Registering the ping handler",
-  "Registering the pong handler", 
-  "KaptureHandler Log: Connected.",
-  "Material-UI: The Menu component doesn't accept a Fragment as a child.\nConsider providing an array instead.",
-  "KaptureHandler Log: ECHOBOT: Send a message to empa120040@xmpp.adjetter.com/7941124308373112218431692040 to talk to me."
-];
-
-// Use this list when only part of the console message needs to match.
-const INCLUDED_IGNORED_CONSOLE_PHRASES = [
-  "expiryTimestamp (ms) invalid",
-  "Skipping registration",
-  "FirebaseService",
-  "Whoops! Lost connection to",
-  "WebSocketService",
-  "Web Socket", 
-  "web_socket", 
-  "jwt_access_token", 
-  "KaptureHandler"
 ];
 
 function safelyConvertToString(value) {
@@ -167,9 +145,19 @@ function serializeConsoleArgument(argument) {
   }
 }
 
-function shouldIgnoreMessage(message) {
+function shouldIgnoreMessage(message, getCurrentCmId) {
+  const defaultConfig = CLIENT_MONITORING_CONFIG.default;
+  const clientConfig = CLIENT_MONITORING_CONFIG[getCurrentCmId?.()] || {};
+  const exactMessages = [
+    ...defaultConfig.EXACT_IGNORED_CONSOLE_MESSAGES,
+    ...(clientConfig.EXACT_IGNORED_CONSOLE_MESSAGES || []),
+  ];
+  const includedPhrases = [
+    ...defaultConfig.INCLUDED_IGNORED_CONSOLE_PHRASES,
+    ...(clientConfig.INCLUDED_IGNORED_CONSOLE_PHRASES || []),
+  ];
   const normalizedMessage = message.toLowerCase();
-  const hasExactMatch = EXACT_IGNORED_CONSOLE_MESSAGES.some(
+  const hasExactMatch = exactMessages.some(
     (ignoredMessage) => normalizedMessage === ignoredMessage.toLowerCase()
   );
 
@@ -177,12 +165,12 @@ function shouldIgnoreMessage(message) {
     return true;
   }
 
-  return INCLUDED_IGNORED_CONSOLE_PHRASES.some((phrase) =>
+  return includedPhrases.some((phrase) =>
     normalizedMessage.includes(phrase.toLowerCase())
   );
 }
 
-export function startConsoleTracker() {
+export function startConsoleTracker(getCurrentCmId) {
 
   METHODS.forEach((method) => {
 
@@ -190,7 +178,7 @@ export function startConsoleTracker() {
 
       const message = args.map(serializeConsoleArgument).join(" ");
 
-      if (!shouldIgnoreMessage(message)) {
+      if (!shouldIgnoreMessage(message, getCurrentCmId)) {
         addEvent({
           id: crypto.randomUUID(),
           type: "console",
@@ -207,4 +195,3 @@ export function startConsoleTracker() {
   });
 
 }
-

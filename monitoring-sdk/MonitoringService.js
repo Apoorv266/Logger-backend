@@ -12,6 +12,19 @@ import { OriginalConsole } from "./OriginalConsole";
 
 let clientDetailsProvider;
 
+function getCurrentCmId() {
+  if (typeof clientDetailsProvider !== "function") {
+    return undefined;
+  }
+
+  try {
+    const cmId = clientDetailsProvider()?.cmId;
+    return cmId === undefined || cmId === null ? undefined : String(cmId).trim();
+  } catch (error) {
+    return undefined;
+  }
+}
+
 function getFreshClientDetails() {
   if (typeof clientDetailsProvider !== "function") {
     return {};
@@ -77,17 +90,12 @@ export const MonitoringService = {
       clientDetailsProvider = config.getClientDetails;
     }
 
-    startConsoleTracker();
+    startConsoleTracker(getCurrentCmId);
     startErrorTracker();
     startPromiseTracker();
     startFetchTracker({
-      ignoredUrls: [
-        config.endpoint,
-        "https://firebaselogging-pa.googleapis.com",
-        "https://www.google-analytics.com",
-        "https://analytics.google.com",
-        "https://api.eu.amplitude.com",
-      ],
+      getCurrentCmId,
+      ignoredUrls: [config.endpoint],
     });
     startErrorBoundaryTracker();
 

@@ -1,4 +1,5 @@
 import { addEvent } from "./EventQueue"
+import { CLIENT_MONITORING_CONFIG } from "./ClientMonitoringConfig"
 
 const MAX_CAPTURED_RESPONSE_LENGTH = 100000
 const SENSITIVE_HEADERS = new Set([
@@ -138,8 +139,16 @@ function getSafeRequestDetails(input, init) {
     }
 }
 
-function shouldIgnoreFetchRequest(url) {
-    return Array.from(ignoredFetchUrls).some(ignoredUrl => {
+function shouldIgnoreFetchRequest(url, getCurrentCmId) {
+    const defaultConfig = CLIENT_MONITORING_CONFIG.default
+    const clientConfig = CLIENT_MONITORING_CONFIG[getCurrentCmId?.()] || {}
+    const configuredIgnoredUrls = [
+        ...ignoredFetchUrls,
+        ...defaultConfig.ignoredUrls,
+        ...(clientConfig.ignoredUrls || []),
+    ]
+
+    return configuredIgnoredUrls.some(ignoredUrl => {
         try {
             const requestUrl = new URL(url, window.location.href)
             const normalizedIgnoredUrl = new URL(ignoredUrl, window.location.href)
@@ -266,7 +275,7 @@ function safelyCaptureNativeFetchInfo(...args) {
     }
 }
 
-function trackNativeFetch() {
+function trackNativeFetch(getCurrentCmId) {
     if (typeof window.fetch !== "function") {
         return
     }
@@ -276,7 +285,7 @@ function trackNativeFetch() {
     window.fetch = async (input, init) => {
         const requestDetails = getSafeRequestDetails(input, init)
 
-        if (shouldIgnoreFetchRequest(requestDetails.url)) {
+        if (shouldIgnoreFetchRequest(requestDetails.url, getCurrentCmId)) {
             return originalFetch(input, init)
         }
 
@@ -329,7 +338,6 @@ export function startFetchTracker(config = {}) {
         configurable: false,
     })
 
-    trackNativeFetch()
+    trackNativeFetch(config.getCurrentCmId)
     window.__networkTrackerInitialized = true
 }
-
