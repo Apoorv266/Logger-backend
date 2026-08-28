@@ -100,56 +100,80 @@ export const MonitoringService = {
   },
 
   start(config = {}) {
-    if (window.__kaptureMonitoringStarted) {
-      return false;
-    }
-
-    const endpoint = normalizeEndpoint(config.endpoint);
-
-    // if react loads first , this sets clientDetailsProvider
-    if (typeof config.getClientDetails === "function") {
-      clientDetailsProvider = config.getClientDetails;
-    }
-
-    startConsoleTracker(getCurrentCmId);
-    startErrorTracker();
-    startPromiseTracker();
-    startFetchTracker({
-      getCurrentCmId,
-      ignoredUrls: [endpoint],
-    });
-    startErrorBoundaryTracker();
-
-    window.__kaptureMonitoringStarted = true;
-
-    setInterval(() => {
-      const events = getQueue();
-
-      if (events.length === 0) {
-        return;
+    try {
+      if (window.__kaptureMonitoringStarted) {
+        return {
+          status: "success",
+          message: "Monitoring is already attached",
+        };
       }
+
+      const endpoint = normalizeEndpoint(config.endpoint);
 
       if (!endpoint) {
-        OriginalConsole.table(events);
-        return;
+        return {
+          status: "error",
+          message: "Monitoring endpoint must be a valid HTTP or HTTPS URL",
+        };
       }
 
-      fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          app: config.app,
-          events,
-          clientDetails: getFreshClientDetails(),
-        }),
-      }).catch((error) =>
-        OriginalConsole.error(
-          "MonitoringService: failed to report events",
-          error,
-        ),
-      );
-    }, 20000);
+      // if react loads first , this sets clientDetailsProvider
+      if (typeof config.getClientDetails === "function") {
+        clientDetailsProvider = config.getClientDetails;
+      }
 
-    return true;
+      startConsoleTracker(getCurrentCmId);
+      startErrorTracker();
+      startPromiseTracker();
+      startFetchTracker({
+        getCurrentCmId,
+        ignoredUrls: [endpoint],
+      });
+      startErrorBoundaryTracker();
+
+      window.__kaptureMonitoringStarted = true;
+
+      setInterval(() => {
+        const events = getQueue();
+
+        if (events.length === 0) {
+          return;
+        }
+
+        fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            app: config.app,
+            events,
+            clientDetails: getFreshClientDetails(),
+          }),
+        }).catch((error) =>
+          OriginalConsole.error(
+            "MonitoringService: failed to report events",
+            error,
+          ),
+        );
+      }, 20000);
+
+      return {
+        status: "success",
+        message: "Monitoring attached successfully",
+      };
+    } catch (error) {
+      try {
+        OriginalConsole.error(
+          "MonitoringService: failed to attach",
+          error,
+        );
+      } catch (_error) {
+        // Monitoring errors must never prevent the application from loading.
+      }
+
+      return {
+        status: "error",
+        message: "Monitoring failed to attach",
+      };
+    }
   },
 };

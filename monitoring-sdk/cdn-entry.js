@@ -59,7 +59,7 @@ function getDefaultEndpoint(script) {
     return scriptUrl ? new URL("/api/logs", scriptUrl).href : undefined
 }
 
-function exposePublicApi() {
+function exposePublicApi(status) {
     const existingApi = getOwnDataProperty(window, "KaptureMonitoring")
 
     if (
@@ -74,6 +74,7 @@ function exposePublicApi() {
     const publicApi = Object.freeze({
         name: PUBLIC_API_NAME,
         version: PUBLIC_API_VERSION,
+        getStatus: () => status,
         setClientDetailsProvider: provider => MonitoringService.setClientDetailsProvider(provider),
     })
 
@@ -90,10 +91,10 @@ function exposePublicApi() {
 
 const script = document.currentScript
 const clientConfig = readClientConfig()
-exposePublicApi()
-
-MonitoringService.start({
+const status = Object.freeze(MonitoringService.start({
     endpoint: normalizeEndpoint(script?.dataset.endpoint) || clientConfig.endpoint || getDefaultEndpoint(script),
     app: normalizeString(script?.dataset.app) || clientConfig.app,
     getClientDetails: clientConfig.getClientDetails,
-})
+}))
+
+exposePublicApi(status)
