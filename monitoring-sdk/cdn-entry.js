@@ -3,7 +3,7 @@
 // Consuming pages include it as:
 // <script src="https://logger.example.com/monitoring/v1/monitoring.min.js" data-app="nui"></script>
 
-import { MonitoringService } from "./MonitoringService"
+import { MonitoringService, normalizeEndpoint } from "./MonitoringService"
 
 const PUBLIC_API_NAME = "kapture-monitoring"
 const PUBLIC_API_VERSION = 1
@@ -17,22 +17,6 @@ function getOwnDataProperty(object, propertyName) {
 
 function normalizeString(value) {
     return typeof value === "string" && value.trim() ? value.trim() : undefined
-}
-
-function normalizeEndpoint(value) {
-    const endpoint = normalizeString(value)
-
-    if (!endpoint) {
-        return undefined
-    }
-
-    try {
-        const url = new URL(endpoint, window.location.href)
-
-        return url.protocol === "http:" || url.protocol === "https:" ? url.href : undefined
-    } catch (_error) {
-        return undefined
-    }
 }
 
 function readClientConfig() {

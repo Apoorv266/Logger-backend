@@ -12,6 +12,24 @@ import { OriginalConsole } from "./OriginalConsole";
 
 let clientDetailsProvider;
 
+export function normalizeEndpoint(value) {
+  const endpoint =
+    typeof value === "string" && value.trim() ? value.trim() : undefined;
+
+  if (!endpoint) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(endpoint, window.location.href);
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? url.href
+      : undefined;
+  } catch (error) {
+    return undefined;
+  }
+}
+
 function getCurrentCmId() {
   if (typeof clientDetailsProvider !== "function") {
     return undefined;
@@ -85,6 +103,9 @@ export const MonitoringService = {
     if (window.__kaptureMonitoringStarted) {
       return false;
     }
+
+    const endpoint = normalizeEndpoint(config.endpoint);
+
     // if react loads first , this sets clientDetailsProvider
     if (typeof config.getClientDetails === "function") {
       clientDetailsProvider = config.getClientDetails;
@@ -95,7 +116,7 @@ export const MonitoringService = {
     startPromiseTracker();
     startFetchTracker({
       getCurrentCmId,
-      ignoredUrls: [config.endpoint],
+      ignoredUrls: [endpoint],
     });
     startErrorBoundaryTracker();
 
@@ -108,12 +129,12 @@ export const MonitoringService = {
         return;
       }
 
-      if (!config.endpoint) {
+      if (!endpoint) {
         OriginalConsole.table(events);
         return;
       }
 
-      fetch(config.endpoint, {
+      fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
